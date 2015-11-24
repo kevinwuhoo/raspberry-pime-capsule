@@ -1,0 +1,122 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+
+    # - name: Update Apt Cache
+    #   apt: update_cache=yes
+
+    # - name: "raspi-config: Make a Copy to Home Dir"
+    #   command: cp /usr/bin/raspi-config /home/pi/raspi-config
+
+    # - name: "raspi-config: Set INTERACTIVE var to False"
+    #   lineinfile: dest=/home/pi/raspi-config state=present regexp="INTERACTIVE=True" line="INTERACTIVE=False"
+
+    # - name: "raspi-config: Allow execution of functions from params"
+    #   lineinfile: dest=/home/pi/raspi-config state=present insertafter=EOF line='"$@"'
+
+    # - name: "raspi-config: Run do_expand_rootfs"
+    #   command: ./raspi-config do_expand_rootfs
+
+    # - name: "raspi-config: Restart machine for expansion to take effect"
+    #   command: shutdown -r now "Ansible updates triggered"
+    #   async: 0
+    #   poll: 0
+    #   ignore_errors: true
+
+    # - name: "raspi-config: Waiting for RPi to Restart"
+    #   local_action: wait_for host={{ inventory_hostname }} state=started
+    #   sudo: no
+
+    # - name: "Time Machine Drive: Install HFS+ support"
+    #   apt: pkg={{item}} state=present
+    #   with_items:
+    #     - hfsprogs
+    #     - hfsplus
+
+    # - name: "Time Machine Drive: Create Directory for Mount"
+    #   file: path=/mnt/time_machine state=directory mode=0755
+
+    # - name: "Time Machine Drive: Add to /etc/fstab"
+    #   lineinfile: dest=/etc/fstab state=present insertafter=EOF line="/dev/sda2     /mnt/time_machine hfsplus force,rw,user,auto        0       0"
+
+    # # TODO if the drive is mounted already this throws an error
+    # - name: "Time Machine Drive: Mount It"
+    #   mount: name=/mnt/time_machine src=/dev/sda2 fstype=hfsplus state=mounted
+    #   ignore_errors: yes
+
+    # - name: "AFP: Install Netatalk Dependencies"
+    #   apt: pkg={{item}} state=present
+    #   with_items:
+    #     - build-essential
+    #     - libevent-dev
+    #     - libssl-dev
+    #     - libgcrypt11-dev
+    #     - libkrb5-dev
+    #     - libpam0g-dev
+    #     - libwrap0-dev
+    #     - libdb-dev
+    #     - libtdb-dev
+    #     - libmysqlclient-dev
+    #     - libavahi-client-dev
+    #     - libacl1-dev
+    #     - libldap2-dev
+    #     - libcrack2-dev
+    #     - systemtap-sdt-dev
+    #     - libdbus-1-dev
+    #     - libdbus-glib-1-dev
+    #     - libglib2.0-dev
+    #     - tracker
+    #     - libtracker-sparql-1.0-dev
+    #     - libtracker-miner-1.0-dev
+
+    # - name: "AFP: Remove Netatalk Conflict"
+    #   apt: pkg=libavahi-compat-libdnssd-dev state=absent
+
+    # - name: "AFP: Create Directory for Untar"
+    #   file: path=/home/pi/netatalk-3.1.7 state=directory mode=0755
+
+    # - name: "AFP: Download and Untar Netatalk"
+    #   unarchive: src="http://prdownloads.sourceforge.net/netatalk/netatalk-3.1.7.tar.bz2?download" dest=/home/pi copy=no
+
+    # - name: "AFP: Configure"
+    #   command: ./configure --with-init-style=debian-systemd --without-libevent --without-tdb --with-cracklib --enable-krbV-uam --with-pam-confdir=/etc/pam.d --with-dbus-sysconf-dir=/etc/dbus-1/system.d --with-tracker-pkgconfig-version=1.0 chdir=/home/pi/netatalk-3.1.7
+
+    # - name: "AFP: Make"
+    #   command: make chdir=/home/pi/netatalk-3.1.7
+
+    # - name: "AFP: Make Install"
+    #   command: make install chdir=/home/pi/netatalk-3.1.7
+
+    # - name: "AFP: Check Features and Paths"
+    #   command: /usr/local/sbin/afpd -V
+    #   register: afp_verbose
+
+    # - debug: var=afp_verbose
+
+    - name: "Configure: Edit /etc/nsswitch.conf"
+      lineinfile: "dest=/etc/nsswitch.conf state=present regexp='hosts:          files mdns4_minimal [NOTFOUND=return] dns' line='hosts:          files mdns4_minimal [NOTFOUND=return] dns mdns'"
+
+    - name: "Configure: Template /etc/avahi/services/afpd.service"
+      template: src=templates/afpd.service.j2 dest=/etc/avahi/services/afpd.service
+
+    - name: "Configure: Template /usr/local/etc/afp.conf"
+      template: src=templates/afp.conf.j2 dest=/usr/local/etc/afp.conf
+
+    - name: "Configure: Make Sure avahi-daemon and netatalk are Running and Run at Boot"
+      service: name={{item}} state=started enabled=yes
+      with_items:
+        - avahi-daemon
+        - netatalk
+
+    - name: "Spin Down Idle Drive: Install hdparm"
+      apt: pkg=hdparm state=present
+
+    - name: "Spin Down Idle Drive: Configure hdparm"
+      lineinfile: dest=/etc/hdparm.conf state=present insertafter=EOF line="command_line {\n  hdparm -S 240 /dev/sda\n}"
+
+    - name: "Spin Down Idle Drive: Restart machine for hdparm to take effect"
+      command: shutdown -r now "Ansible updates triggered"
+      async: 0
+      poll: 0
+      ignore_errors: true
